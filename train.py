@@ -23,6 +23,7 @@ class Train(object):
         self.img_width = img_width
         self.img_height = img_height
 
+        self.data_path = data_path
         self.train_dataset, self.val_dataset = None, None
         self.train_data_loader, self.val_data_loader = None, None
 
@@ -42,7 +43,7 @@ class Train(object):
         return model
 
     def start(self):
-        self.train_dataset, self.val_dataset = table_dataset.allocation_dataset(data_path, img_width, img_height)
+        self.train_dataset, self.val_dataset = table_dataset.allocation_dataset(self.data_path, self.img_width, self.img_height)
         self.train_data_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=8)
         self.val_data_loader = DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=True, num_workers=8)
         optimizer = Adam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
