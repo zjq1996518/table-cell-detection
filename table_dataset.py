@@ -8,8 +8,10 @@ import cv2
 import utils
 import numpy as np
 
+from constant import MEAN, STD
 
-def allocation_dataset(data_path, allocation_rate=0.8, resize_width=512, resize_height=128):
+
+def allocation_dataset(data_path, resize_width=512, resize_height=128, allocation_rate=0.8):
     path = glob(f'{data_path}/*.jpg')
     data_paths = []
     mask_paths = []
@@ -56,16 +58,17 @@ class TableDataset(Dataset):
         table_img = cv2.erode(table_img, np.ones([3, 3], dtype=np.uint8), iterations=3)
         mask_img = cv2.erode(mask_img, np.ones([3, 3], dtype=np.uint8), iterations=3)
 
-        table_img = self.standard_resize(table_img, self.resize_height, self.resize_width)
-        mask_img = self.standard_resize(mask_img, self.resize_height, self.resize_width)
+        table_img, _, _ = self.standard_resize(table_img, self.resize_height, self.resize_width)
+        mask_img, _, _ = self.standard_resize(mask_img, self.resize_height, self.resize_width)
 
+        table_img = (table_img - np.array(MEAN, dtype=np.float32)) / np.array(STD, dtype=np.float32)
         x = torch.tensor(table_img).float()
         label = torch.tensor(mask_img).float()
-        x = x.permute([2, 0, 1])/255
+        x = x.permute([2, 0, 1])
         label = label/255
 
-        x = utils.pad(x, 512, 128)
-        label = utils.pad(label, 512, 128)
+        x, _, _ = utils.pad(x, 512, 128)
+        label, _, _ = utils.pad(label, 512, 128)
 
         return x, label
 
@@ -74,15 +77,24 @@ class TableDataset(Dataset):
 
     @staticmethod
     def standard_resize(img, resize_height, resize_width):
+        """
+        不改变图片宽高比，对图片进行缩放
+        :param img:
+        :param resize_height:
+        :param resize_width:
+        :return:
+        """
         # 填充留到pytorch_tensor 部分
         h, w = img.shape[:2]
+        ratio_w, ratio_h = 1, 1
         # 两个都大, 图片缩放按照差距较大的那个标准，然后对差距较大的做填充
         if h > resize_height and w > resize_width:
             flag = 0 if resize_height/h < resize_width/w else 1
             scale_h = resize_height if flag == 0 else round(resize_width/w * h)
             scale_w = round(resize_height/h * w) if flag == 0 else resize_width
             img = cv2.resize(img, (scale_w, scale_h), interpolation=cv2.INTER_AREA)
-
+            ratio_h = scale_h / h
+            ratio_w = scale_w / w
         # 两个都小，图片填充
         elif w <= resize_width and h <= resize_height:
             pass
@@ -93,8 +105,10 @@ class TableDataset(Dataset):
             scale_h = resize_height if flag == 0 else round(resize_width/w * h)
             scale_w = round(scale_h/h * w) if flag == 0 else resize_width
             img = cv2.resize(img, (scale_w, scale_h), interpolation=cv2.INTER_AREA)
+            ratio_h = scale_h / h
+            ratio_w = scale_w / w
 
-        return img
+        return img, ratio_w, ratio_h
 
     @staticmethod
     def data_augmentation(img, mask):

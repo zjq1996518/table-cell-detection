@@ -7,6 +7,8 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam
 import torch.nn.functional as F
 
+from utils import calc_target
+
 
 class Train(object):
     def __init__(self, model_name, data_path, img_width=512, img_height=128, lr=1e-4, weight_decay=1e-5, epoch=100, batch_size=4, device='cuda:0',
@@ -44,8 +46,8 @@ class Train(object):
 
     def start(self):
         self.train_dataset, self.val_dataset = table_dataset.allocation_dataset(self.data_path, self.img_width, self.img_height)
-        self.train_data_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=8)
-        self.val_data_loader = DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=True, num_workers=8)
+        self.train_data_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=2)
+        self.val_data_loader = DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=True, num_workers=2)
         optimizer = Adam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         exp_lr = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.90)
         for e in range(self.epoch):
@@ -54,6 +56,7 @@ class Train(object):
                 avg_loss = 0
                 avg_acc = 0
                 avg_recall = 0
+                avg_f1 = 0
                 for i, (x, label) in enumerate(self.train_data_loader):
                     x = x.to(self.device)
                     label = label.to(self.device)
@@ -79,15 +82,15 @@ class Train(object):
                     y[y < 0.5] = 0.
                     with torch.no_grad():
                         # 计算平均准确率、召回率 f1分数
-                        avg_acc += torch.mean((label == y).float()).item()
-                        acc_tensor = y[y == label]
-                        avg_recall += ((torch.sum(acc_tensor == 0)+1e-6) / (torch.sum(y == 0)+1e-6)).item()
-                        f1 = 2 * (avg_acc * avg_recall) / (avg_recall + avg_acc) / (i + 1)
+                        acc, recall, f1 = calc_target(y, label)
+                        avg_acc += acc
+                        avg_recall += recall
+                        avg_f1 += f1
                         bar.set_postfix({
                             'loss': avg_loss / (i + 1),
                             'acc': avg_acc / (i + 1),
                             'recall': avg_recall / (i + 1),
-                            'f1': f1
+                            'f1': avg_f1 / (i + 1)
                         })
                         bar.update(1)
 
@@ -99,6 +102,7 @@ class Train(object):
             self.model.eval()
             avg_acc = 0
             avg_recall = 0
+            avg_f1 = 0
             with torch.no_grad():
                 for i, (x, label) in enumerate(self.val_data_loader):
                     x = x.to(self.device)
@@ -115,20 +119,20 @@ class Train(object):
                     y[y < 0.5] = 0.
                     with torch.no_grad():
                         # 计算平均准确率、召回率 f1分数
-                        avg_acc += torch.mean((label == y).float()).item()
-                        acc_tensor = y[y == label]
-                        avg_recall += ((torch.sum(acc_tensor == 0)+1e-6) / (torch.sum(y == 0)+1e-6)).item()
-                        f1 = 2 * (avg_acc * avg_recall) / (avg_recall + avg_acc) / (i + 1)
+                        acc, recall, f1 = calc_target(y, label)
+                        avg_acc += acc
+                        avg_recall += recall
+                        avg_f1 += f1
                         bar.set_postfix({
                             'acc': avg_acc / (i + 1),
                             'recall': avg_recall / (i + 1),
-                            'f1': f1
+                            'f1': avg_f1 / (i + 1)
                         })
                         bar.update(1)
 
-        self.model.save_weight(epoch=epoch, f1=f1)
+        self.model.save_weight(epoch=epoch, f1=avg_f1 / (i + 1))
 
 
 if __name__ == '__main__':
-    train = Train('unet3+', data_path='/local/aitrain/zjq/unet-data', device='cuda:2')
+    train = Train('unet', data_path='/local/aitrain/zjq/unet-data', device='cuda:2')
     train.start()
