@@ -59,5 +59,5 @@ class Test(Train):
 
 if __name__ == '__main__':
     test = Test(model_name='ma-unet', device='cuda:3', weight_epoch_name='latest')
-    img = cv2.imread(f'{PROJECT_PATH}/img/test.jpg')
+    img = cv2.imread(f'{PROJECT_PATH}/img/origin.png')
     img, cells = test.single_test(img)
