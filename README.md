@@ -1,4 +1,4 @@
-# 表格单元格检测
+# 表格单元格检测 （Pytorch）
 
 利用unet系列模型，对表格进行单元格检测  
 支持的模型：unet unet++ unet3+ ma-unet  
